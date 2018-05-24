@@ -2,7 +2,8 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Error, ErrorKind, Read, Result};
 
-/// Represents the input source for scroll.
+/// Represents the input source for scroll. Can either be from a
+/// `File`, or from 'Stdin'.
 pub enum Source {
     FromFile(File),
     FromStdin(io::Stdin),
