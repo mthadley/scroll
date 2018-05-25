@@ -1,9 +1,9 @@
 extern crate termion;
 
+mod app;
 mod cmd;
 mod source;
 mod term;
-mod app;
 
 use std::io::Result;
 

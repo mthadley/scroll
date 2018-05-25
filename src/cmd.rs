@@ -14,7 +14,7 @@ pub enum Dir {
     HalfPageUp,
     HalfPageDown,
     Top,
-    Bottom
+    Bottom,
 }
 
 impl From<Key> for Cmd {
