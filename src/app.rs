@@ -98,7 +98,7 @@ impl State {
 
         self.draw()?;
 
-        return Ok(false);
+        Ok(false)
     }
 
     fn draw(&mut self) -> Result<()> {
