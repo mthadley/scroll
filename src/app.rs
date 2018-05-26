@@ -25,7 +25,7 @@ pub fn run() -> Result<()> {
     let data_tx = tx.clone();
     thread::spawn(move || events_from(source, data_tx));
 
-    for event in rx.iter() {
+    for event in rx {
         if state.update(event?)? {
             break;
         }
