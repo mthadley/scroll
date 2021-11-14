@@ -1,10 +1,11 @@
 //! Contains the main logic for `scroll`.
 
 use crate::cmd::{Cmd, Dir};
-use crate::source::get_source;
 use crate::term::Term;
 use std::cmp::{max, min};
-use std::io::{self, BufRead};
+use std::env;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::thread;
 use termion::color::{self, Bg, Fg};
@@ -42,6 +43,16 @@ fn events_from(
         tx.send(result.map(|i| i.into()))
             .expect("Channel has hung up.");
     }
+}
+
+/// Attempts to read a file from the passed arguments, or defaults
+/// to reading data from stdin.
+fn get_source() -> io::Result<Box<dyn BufRead + Send>> {
+    if let Some(path) = env::args().nth(1) {
+        return Ok(Box::new(BufReader::new(File::open(path)?)));
+    }
+
+    Ok(Box::new(BufReader::new(io::stdin())))
 }
 
 const STATUS_BAR_HEIGHT: usize = 1;
@@ -138,7 +149,7 @@ impl State {
         let height = self.term.height() - STATUS_BAR_HEIGHT;
         let mut line_count = 0;
 
-        for line in self.data.iter().skip(self.offset) {
+        for line in self.data.iter().skip(self.offset).take(height - 1) {
             if line_count >= height {
                 break;
             }

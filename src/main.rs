@@ -1,6 +1,5 @@
 mod app;
 mod cmd;
-mod source;
 mod term;
 
 use std::io::Result;
