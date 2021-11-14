@@ -149,13 +149,8 @@ impl State {
         let height = self.term.height() - STATUS_BAR_HEIGHT;
         let mut line_count = 0;
 
-        for line in self.data.iter().skip(self.offset).take(height - 1) {
-            if line_count >= height {
-                break;
-            }
-
+        for line in self.data.iter().skip(self.offset).take(height) {
             self.term.write_line(line)?;
-
             line_count += 1;
         }
 
