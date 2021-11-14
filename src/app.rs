@@ -9,9 +9,10 @@ use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::thread;
 use termion::color::{self, Bg, Fg};
-use termion::event::Key;
 use termion::get_tty;
 use termion::input::TermRead;
+
+const DATA_BUFFER_SIZE: usize = 500;
 
 pub fn run() -> io::Result<()> {
     let source = get_source()?.lines();
@@ -21,10 +22,32 @@ pub fn run() -> io::Result<()> {
 
     let key_tx = tx.clone();
     let tty = get_tty()?;
-    thread::spawn(move || events_from(tty.keys(), key_tx));
+    thread::spawn(move || {
+        for key in tty.keys() {
+            key_tx
+                .send(key.map(|i| Event::Command(i.into())))
+                .expect("Channel has hung up.");
+        }
+    });
 
     let data_tx = tx.clone();
-    thread::spawn(move || events_from(source, data_tx));
+    thread::spawn(move || {
+        let mut lines: Vec<String> = Vec::with_capacity(DATA_BUFFER_SIZE);
+
+        for result in source {
+            match result {
+                Err(e) => data_tx.send(Err(e)).expect("Channel has hung up."),
+                Ok(data) => lines.push(data),
+            };
+
+            if lines.len() >= DATA_BUFFER_SIZE {
+                send_data(&data_tx, lines);
+                lines = Vec::with_capacity(DATA_BUFFER_SIZE);
+            }
+        }
+
+        send_data(&data_tx, lines);
+    });
 
     for event in rx {
         if state.update(event?)? {
@@ -35,14 +58,10 @@ pub fn run() -> io::Result<()> {
     Ok(())
 }
 
-fn events_from(
-    stream: impl Iterator<Item = io::Result<impl Into<Event>>>,
-    tx: SyncSender<io::Result<Event>>,
-) {
-    for result in stream {
-        tx.send(result.map(|i| i.into()))
-            .expect("Channel has hung up.");
-    }
+fn send_data(data_tx: &SyncSender<io::Result<Event>>, data: Vec<String>) {
+    data_tx
+        .send(Ok(Event::MoreData(data.into_boxed_slice())))
+        .expect("Channel has hung up.");
 }
 
 /// Attempts to read a file from the passed arguments, or defaults
@@ -58,20 +77,8 @@ fn get_source() -> io::Result<Box<dyn BufRead + Send>> {
 const STATUS_BAR_HEIGHT: usize = 1;
 
 pub enum Event {
-    MoreData(String),
+    MoreData(Box<[String]>),
     Command(Cmd),
-}
-
-impl From<String> for Event {
-    fn from(s: String) -> Self {
-        Event::MoreData(s)
-    }
-}
-
-impl From<Key> for Event {
-    fn from(key: Key) -> Self {
-        Event::Command(key.into())
-    }
 }
 
 struct State {
@@ -131,7 +138,7 @@ impl State {
 
         let status = format!(
             "{fg}{bg}{msg:width$}{reset_fg}{reset_bg}",
-            msg = format!(" {:.0}% of {} lines.", percent, self.data.len()),
+            msg = format!(" {:.0}% of {} lines", percent, self.data.len()),
             width = self.term.width(),
             fg = Fg(color::White),
             bg = Bg(color::LightBlack),
@@ -209,10 +216,12 @@ impl State {
         }
     }
 
-    fn append(&mut self, line: String) {
-        self.data.push(line);
+    fn append(&mut self, lines: Box<[String]>) {
+        let old_len = self.data.len();
 
-        if self.data.len() - self.offset <= self.term.height() - STATUS_BAR_HEIGHT {
+        self.data.append(&mut Vec::from(lines));
+
+        if old_len + self.offset <= self.term.height() - STATUS_BAR_HEIGHT {
             self.dirty = true;
         }
     }
