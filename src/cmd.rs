@@ -23,10 +23,10 @@ impl From<Key> for Cmd {
             Key::Char('q') | Key::Ctrl('c') => Cmd::Quit,
             Key::Char('j') | Key::Down => Cmd::Scroll(Dir::Down(1)),
             Key::Char('k') | Key::Up => Cmd::Scroll(Dir::Up(1)),
-            Key::Char('g') => Cmd::Scroll(Dir::Top),
-            Key::Char('G') => Cmd::Scroll(Dir::Bottom),
-            Key::Ctrl('d') => Cmd::Scroll(Dir::HalfPageDown),
-            Key::Ctrl('u') => Cmd::Scroll(Dir::HalfPageUp),
+            Key::Char('g') | Key::Home => Cmd::Scroll(Dir::Top),
+            Key::Char('G') | Key::End => Cmd::Scroll(Dir::Bottom),
+            Key::Ctrl('d') | Key::PageDown => Cmd::Scroll(Dir::HalfPageDown),
+            Key::Ctrl('u') | Key::PageUp => Cmd::Scroll(Dir::HalfPageUp),
             _ => Cmd::Noop,
         }
     }
