@@ -138,7 +138,7 @@ impl State {
 
         let status = format!(
             "{fg}{bg}{msg:width$}{reset_fg}{reset_bg}",
-            msg = format!(" {:.0}% of {} lines", percent, self.data.len()),
+            msg = format!(" {:3.0}% of {} lines", percent, self.data.len()),
             width = self.term.width(),
             fg = Fg(color::White),
             bg = Bg(color::LightBlack),
