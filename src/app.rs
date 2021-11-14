@@ -127,8 +127,7 @@ impl State {
         let text_height = self.term.height() - (STATUS_BAR_HEIGHT - 1);
         self.term.move_cursor(1, text_height)?;
 
-        let percent: f32 =
-            ((self.offset + 1) as f32) / (max(self.max_offset(), 1) as f32) * 100_f32;
+        let percent: f32 = ((self.offset) as f32) / (max(self.max_offset(), 1) as f32) * 100_f32;
 
         let status = format!(
             "{fg}{bg}{msg:width$}{reset_fg}{reset_bg}",
