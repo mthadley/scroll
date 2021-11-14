@@ -49,10 +49,10 @@ fn events_from(
 /// to reading data from stdin.
 fn get_source() -> io::Result<Box<dyn BufRead + Send>> {
     if let Some(path) = env::args().nth(1) {
-        return Ok(Box::new(BufReader::new(File::open(path)?)));
+        Ok(Box::new(BufReader::new(File::open(path)?)))
+    } else {
+        Ok(Box::new(BufReader::new(io::stdin())))
     }
-
-    Ok(Box::new(BufReader::new(io::stdin())))
 }
 
 const STATUS_BAR_HEIGHT: usize = 1;
