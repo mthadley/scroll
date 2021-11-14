@@ -1,5 +1,3 @@
-extern crate termion;
-
 mod app;
 mod cmd;
 mod source;

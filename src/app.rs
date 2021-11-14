@@ -1,18 +1,18 @@
 //! Contains the main logic for `scroll`.
 
-use cmd::{Cmd, Dir};
-use source::get_source;
+use crate::cmd::{Cmd, Dir};
+use crate::source::get_source;
+use crate::term::Term;
 use std::cmp::{max, min};
-use std::io::{BufRead, Result};
+use std::io::{self, BufRead};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::thread;
-use term::Term;
 use termion::color::{self, Bg, Fg};
 use termion::event::Key;
 use termion::get_tty;
 use termion::input::TermRead;
 
-pub fn run() -> Result<()> {
+pub fn run() -> io::Result<()> {
     let source = get_source()?.lines();
     let mut state = State::new()?;
 
@@ -35,8 +35,8 @@ pub fn run() -> Result<()> {
 }
 
 fn events_from(
-    stream: impl Iterator<Item = Result<impl Into<Event>>>,
-    tx: SyncSender<Result<Event>>,
+    stream: impl Iterator<Item = io::Result<impl Into<Event>>>,
+    tx: SyncSender<io::Result<Event>>,
 ) {
     for result in stream {
         tx.send(result.map(|i| i.into()))
@@ -71,7 +71,7 @@ struct State {
 }
 
 impl State {
-    fn new() -> Result<Self> {
+    fn new() -> io::Result<Self> {
         let mut state = State {
             data: Vec::with_capacity(256),
             offset: 0,
@@ -86,7 +86,7 @@ impl State {
         Ok(state)
     }
 
-    fn update(&mut self, event: Event) -> Result<bool> {
+    fn update(&mut self, event: Event) -> io::Result<bool> {
         match event {
             Event::MoreData(data) => self.append(data),
             Event::Command(cmd) => match cmd {
@@ -101,7 +101,7 @@ impl State {
         Ok(false)
     }
 
-    fn draw(&mut self) -> Result<()> {
+    fn draw(&mut self) -> io::Result<()> {
         if self.dirty {
             self.draw_text()?;
             self.dirty = false;
@@ -112,7 +112,7 @@ impl State {
         self.term.flush()
     }
 
-    fn draw_status_bar(&mut self) -> Result<()> {
+    fn draw_status_bar(&mut self) -> io::Result<()> {
         let text_height = self.term.height() - (STATUS_BAR_HEIGHT - 1);
         self.term.move_cursor(1, text_height)?;
 
@@ -132,7 +132,7 @@ impl State {
         self.term.write(status)
     }
 
-    fn draw_text(&mut self) -> Result<()> {
+    fn draw_text(&mut self) -> io::Result<()> {
         self.term.move_cursor(1, 1)?;
 
         let height = self.term.height() - STATUS_BAR_HEIGHT;
