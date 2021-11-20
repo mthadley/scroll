@@ -169,7 +169,7 @@ impl State {
     }
 
     fn max_offset(&self) -> usize {
-        self.data.len().checked_sub(self.term.height()).unwrap_or(0)
+        self.data.len().checked_sub(self.term.height()).unwrap_or(0) + STATUS_BAR_HEIGHT
     }
 
     fn scroll(&mut self, dir: Dir) {
