@@ -1,9 +1,13 @@
-use std::fmt::Display;
-use std::io::{self, Result, Write};
-use termion::cursor;
-use termion::raw::{IntoRawMode, RawTerminal};
-use termion::screen::AlternateScreen;
-use termion::{clear, terminal_size};
+use std::{
+    fmt::Display,
+    io::{self, Result, Write},
+};
+use termion::{
+    clear, cursor,
+    raw::{IntoRawMode, RawTerminal},
+    screen::AlternateScreen,
+    terminal_size,
+};
 
 /// Contains the underlying tty, and manages writes to it.
 pub struct Term {

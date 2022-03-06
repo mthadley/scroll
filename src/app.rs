@@ -1,18 +1,24 @@
 //! Contains the main logic for `scroll`.
 
-use crate::cmd::{Cmd, Dir, SearchCmd, ViewCmd};
-use crate::mode::Mode;
-use crate::term::Term;
-use std::cmp::{max, min};
-use std::env;
-use std::fs::File;
-use std::io::{self, BufRead, BufReader};
-use std::sync::mpsc::{sync_channel, SyncSender};
-use std::thread;
-use termion::color::{self, Bg, Fg};
-use termion::event::Key;
-use termion::get_tty;
-use termion::input::TermRead;
+use crate::{
+    cmd::{Cmd, Dir, SearchCmd, ViewCmd},
+    mode::Mode,
+    term::Term,
+};
+use std::{
+    cmp::{max, min},
+    env,
+    fs::File,
+    io::{self, BufRead, BufReader},
+    sync::mpsc::{sync_channel, SyncSender},
+    thread,
+};
+use termion::{
+    color::{self, Bg, Fg},
+    event::Key,
+    get_tty,
+    input::TermRead,
+};
 
 const DATA_BUFFER_SIZE: usize = 500;
 
