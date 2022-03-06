@@ -33,28 +33,27 @@ pub fn run() -> io::Result<()> {
     thread::spawn(move || {
         for key in tty.keys() {
             key_tx
-                .send(key.map(|i| Event::Key(i)))
+                .send(key.map(Event::Key))
                 .expect("Channel has hung up.");
         }
     });
 
-    let data_tx = tx.clone();
     thread::spawn(move || {
         let mut lines: Vec<String> = Vec::with_capacity(DATA_BUFFER_SIZE);
 
         for result in source {
             match result {
-                Err(e) => data_tx.send(Err(e)).expect("Channel has hung up."),
+                Err(e) => tx.send(Err(e)).expect("Channel has hung up."),
                 Ok(data) => lines.push(data),
             };
 
             if lines.len() >= DATA_BUFFER_SIZE {
-                send_data(&data_tx, lines);
+                send_data(&tx, lines);
                 lines = Vec::with_capacity(DATA_BUFFER_SIZE);
             }
         }
 
-        send_data(&data_tx, lines);
+        send_data(&tx, lines);
     });
 
     for event in rx {
@@ -257,7 +256,7 @@ impl State {
     }
 
     fn max_offset(&self) -> usize {
-        self.data.len().checked_sub(self.term.height()).unwrap_or(0) + STATUS_BAR_HEIGHT
+        self.data.len().saturating_sub(self.term.height()) + STATUS_BAR_HEIGHT
     }
 
     fn scroll(&mut self, dir: Dir) {
@@ -281,12 +280,12 @@ impl State {
     }
 
     fn scroll_up(&mut self, count: usize) {
-        self.update_offset(|offset| offset.checked_sub(count).unwrap_or(0));
+        self.update_offset(|offset| offset.saturating_sub(count));
     }
 
     fn scroll_half_up(&mut self) {
         let height = self.term.height();
-        self.update_offset(|offset| offset.checked_sub(height / 2).unwrap_or(0));
+        self.update_offset(|offset| offset.saturating_sub(height / 2));
     }
 
     fn scroll_half_down(&mut self) {
