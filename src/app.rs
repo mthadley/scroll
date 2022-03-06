@@ -1,6 +1,7 @@
 //! Contains the main logic for `scroll`.
 
-use crate::cmd::{Cmd, Dir};
+use crate::cmd::{Cmd, Dir, SearchCmd, ViewCmd};
+use crate::mode::Mode;
 use crate::term::Term;
 use std::cmp::{max, min};
 use std::env;
@@ -9,6 +10,7 @@ use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::thread;
 use termion::color::{self, Bg, Fg};
+use termion::event::Key;
 use termion::get_tty;
 use termion::input::TermRead;
 
@@ -25,7 +27,7 @@ pub fn run() -> io::Result<()> {
     thread::spawn(move || {
         for key in tty.keys() {
             key_tx
-                .send(key.map(|i| Event::Command(i.into())))
+                .send(key.map(|i| Event::Key(i)))
                 .expect("Channel has hung up.");
         }
     });
@@ -75,10 +77,11 @@ fn get_source() -> io::Result<Box<dyn BufRead + Send>> {
 }
 
 const STATUS_BAR_HEIGHT: usize = 1;
+const CURSOR_SEARCH_OFFSET: usize = 2;
 
 pub enum Event {
     MoreData(Box<[String]>),
-    Command(Cmd),
+    Key(Key),
 }
 
 struct State {
@@ -86,6 +89,7 @@ struct State {
     offset: usize,
     term: Term,
     dirty: bool,
+    mode: Mode,
 }
 
 impl State {
@@ -95,6 +99,7 @@ impl State {
             offset: 0,
             term: Term::new()?,
             dirty: true,
+            mode: Mode::Viewing(None),
         };
 
         state.term.hide_cursor()?;
@@ -105,27 +110,84 @@ impl State {
     }
 
     fn update(&mut self, event: Event) -> io::Result<bool> {
-        match event {
-            Event::MoreData(data) => self.append(data),
-            Event::Command(cmd) => match cmd {
-                Cmd::Quit => return Ok(true),
-                Cmd::Scroll(dir) => self.scroll(dir),
-                Cmd::Noop => {}
-            },
-        }
+        let quit = match event {
+            Event::MoreData(data) => {
+                self.append(data);
+                false
+            }
+            Event::Key(key) => self.handle_key(key),
+        };
 
         self.draw()?;
 
-        Ok(false)
+        Ok(quit)
+    }
+
+    fn handle_key(&mut self, key: Key) -> bool {
+        match (&self.mode, &Cmd::from_key(&self.mode, key)) {
+            (Mode::Viewing(maybe_search_text), Cmd::View(view_cmd)) => match view_cmd {
+                ViewCmd::Quit => return true,
+                ViewCmd::Scroll(dir) => self.scroll(*dir),
+                ViewCmd::StartSearching => self.mode = Mode::Searching("".into()),
+                ViewCmd::NextSearchResult => {
+                    if let Some(search_text) = maybe_search_text {
+                        self.dirty = true;
+                        self.offset = self
+                            .next_occurrence_offset(search_text, self.offset + 1)
+                            .unwrap_or(self.offset);
+                    }
+                }
+                ViewCmd::Noop => (),
+            },
+            (Mode::Searching(search_text), Cmd::Search(search_cmd)) => match search_cmd {
+                SearchCmd::EnterText(text) => {
+                    self.mode = Mode::Searching(search_text.to_owned() + &text)
+                }
+
+                SearchCmd::RemoveChar => {
+                    if !search_text.is_empty() {
+                        self.mode =
+                            Mode::Searching(search_text[0..search_text.len() - 1].to_owned())
+                    }
+                }
+                SearchCmd::Confirm => {
+                    self.dirty = true;
+
+                    self.mode = Mode::Viewing(if !search_text.is_empty() {
+                        self.offset = self
+                            .next_occurrence_offset(search_text, self.offset)
+                            .unwrap_or(self.offset);
+                        Some(search_text.to_owned())
+                    } else {
+                        None
+                    })
+                }
+                SearchCmd::Noop => (),
+            },
+            _ => unreachable!("Got mismatched event for current mode."),
+        };
+
+        false
     }
 
     fn draw(&mut self) -> io::Result<()> {
+        self.term.hide_cursor()?;
+
         if self.dirty {
             self.draw_text()?;
             self.dirty = false;
         }
 
         self.draw_status_bar()?;
+
+        match &self.mode {
+            Mode::Viewing(_) => {}
+            Mode::Searching(search_text) => {
+                self.term
+                    .move_cursor(search_text.len() + CURSOR_SEARCH_OFFSET, self.term.height())?;
+                self.term.show_cursor()?;
+            }
+        };
 
         self.term.flush()
     }
@@ -134,11 +196,18 @@ impl State {
         let text_height = self.term.height() - (STATUS_BAR_HEIGHT - 1);
         self.term.move_cursor(1, text_height)?;
 
-        let percent: f32 = ((self.offset) as f32) / (max(self.max_offset(), 1) as f32) * 100_f32;
+        let msg = match &self.mode {
+            Mode::Viewing(_) => {
+                let percent: f32 =
+                    ((self.offset) as f32) / (max(self.max_offset(), 1) as f32) * 100_f32;
+                format!(" {:3.0}% of {} lines", percent, self.data.len())
+            }
+            Mode::Searching(search_text) => format!("/{}", search_text),
+        };
 
         let status = format!(
             "{fg}{bg}{msg:width$}{reset_fg}{reset_bg}",
-            msg = format!(" {:3.0}% of {} lines", percent, self.data.len()),
+            msg = msg,
             width = self.term.width(),
             fg = Fg(color::White),
             bg = Bg(color::LightBlack),
@@ -156,7 +225,22 @@ impl State {
         let mut line_count = 0;
 
         for line in self.data.iter().skip(self.offset).take(height) {
-            self.term.write_line(line)?;
+            if let Mode::Viewing(Some(ref search_text)) = self.mode {
+                let highlighted_line = line.replace(
+                    search_text,
+                    &format!(
+                        "{bg}{line}{reset_bg}",
+                        line = search_text,
+                        bg = Bg(color::LightBlack),
+                        reset_bg = Bg(color::Reset)
+                    ),
+                );
+
+                self.term.write_line(&highlighted_line)?;
+            } else {
+                self.term.write_line(line)?;
+            };
+
             line_count += 1;
         }
 
@@ -214,6 +298,14 @@ impl State {
             self.offset = offset;
             self.dirty = true;
         }
+    }
+
+    fn next_occurrence_offset(&self, search_text: &str, starting_at: usize) -> Option<usize> {
+        self.data
+            .iter()
+            .skip(starting_at)
+            .position(|line| line.contains(search_text))
+            .map(|base_offset| base_offset + starting_at)
     }
 
     fn append(&mut self, lines: Box<[String]>) {

@@ -1,13 +1,29 @@
+use crate::mode::Mode;
 use termion::event::Key;
 
-/// Possible commands that can be issued by the user.
 pub enum Cmd {
+    View(ViewCmd),
+    Search(SearchCmd),
+}
+
+impl Cmd {
+    pub fn from_key(mode: &Mode, key: Key) -> Self {
+        match mode {
+            Mode::Viewing(_) => Cmd::View(key.into()),
+            Mode::Searching(_) => Cmd::Search(key.into()),
+        }
+    }
+}
+
+pub enum ViewCmd {
     Quit,
     Scroll(Dir),
+    StartSearching,
+    NextSearchResult,
     Noop,
 }
 
-/// Possible directions and places to scroll to.
+#[derive(Clone, Copy)]
 pub enum Dir {
     Up(usize),
     Down(usize),
@@ -17,17 +33,37 @@ pub enum Dir {
     Bottom,
 }
 
-impl From<Key> for Cmd {
+impl From<Key> for ViewCmd {
     fn from(key: Key) -> Self {
         match key {
-            Key::Char('q') | Key::Ctrl('c') => Cmd::Quit,
-            Key::Char('j') | Key::Down => Cmd::Scroll(Dir::Down(1)),
-            Key::Char('k') | Key::Up => Cmd::Scroll(Dir::Up(1)),
-            Key::Char('g') | Key::Home => Cmd::Scroll(Dir::Top),
-            Key::Char('G') | Key::End => Cmd::Scroll(Dir::Bottom),
-            Key::Ctrl('d') | Key::PageDown => Cmd::Scroll(Dir::HalfPageDown),
-            Key::Ctrl('u') | Key::PageUp => Cmd::Scroll(Dir::HalfPageUp),
-            _ => Cmd::Noop,
+            Key::Char('q') | Key::Ctrl('c') => ViewCmd::Quit,
+            Key::Char('j') | Key::Down => ViewCmd::Scroll(Dir::Down(1)),
+            Key::Char('k') | Key::Up => ViewCmd::Scroll(Dir::Up(1)),
+            Key::Char('n') => ViewCmd::NextSearchResult,
+            Key::Char('g') | Key::Home => ViewCmd::Scroll(Dir::Top),
+            Key::Char('G') | Key::End => ViewCmd::Scroll(Dir::Bottom),
+            Key::Ctrl('d') | Key::PageDown => ViewCmd::Scroll(Dir::HalfPageDown),
+            Key::Ctrl('u') | Key::PageUp => ViewCmd::Scroll(Dir::HalfPageUp),
+            Key::Char('/') => ViewCmd::StartSearching,
+            _ => ViewCmd::Noop,
+        }
+    }
+}
+
+pub enum SearchCmd {
+    EnterText(String),
+    RemoveChar,
+    Confirm,
+    Noop,
+}
+
+impl From<Key> for SearchCmd {
+    fn from(key: Key) -> Self {
+        match key {
+            Key::Char('\n') => SearchCmd::Confirm,
+            Key::Char(char) => SearchCmd::EnterText(char.into()),
+            Key::Backspace => SearchCmd::RemoveChar,
+            _ => SearchCmd::Noop,
         }
     }
 }
