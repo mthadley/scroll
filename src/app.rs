@@ -72,8 +72,6 @@ fn send_data(data_tx: &SyncSender<io::Result<Event>>, data: Vec<String>) {
         .expect("Channel has hung up.");
 }
 
-/// Attempts to read a file from the passed arguments, or defaults
-/// to reading data from stdin.
 fn get_source() -> io::Result<Box<dyn BufRead + Send>> {
     if let Some(path) = env::args().nth(1) {
         Ok(Box::new(BufReader::new(File::open(path)?)))
@@ -296,7 +294,6 @@ impl State {
         self.update_offset(|offset| offset + (height / 2));
     }
 
-    /// Updates the offset, and ensures it stays within the bounds of the screen.
     fn update_offset(&mut self, func: impl FnOnce(usize) -> usize) {
         let offset = min(func(self.offset), self.max_offset());
 

@@ -9,17 +9,12 @@ use termion::{
     terminal_size,
 };
 
-/// Contains the underlying tty, and manages writes to it.
 pub struct Term {
     out: AlternateScreen<RawTerminal<io::Stdout>>,
     dimensions: (u16, u16),
 }
 
 impl Term {
-    /// Returns a new `Term`, putting the current tty into raw mode
-    /// at the same time. Also includes a `Drop` implemenation that shows
-    /// the cursor again, since otherwise it will stay hidden when the program
-    /// exits.
     pub fn new() -> Result<Self> {
         io::stdout().into_raw_mode().and_then(|t| {
             Ok(Term {
@@ -61,8 +56,6 @@ impl Term {
         write!(&mut self.out, "{}", d)
     }
 
-    /// Writes the `string` out to the terminal, and fills in blanks
-    /// up to the terminal width.
     pub fn write_line(&mut self, string: &str) -> Result<()> {
         let len = string.len();
         let width = self.width();
